@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 /*
@@ -13,7 +15,7 @@ import (
 	waits on the channel before sending to release channel.
 
 
-	-------------------------------------------implementation----------------------------------------------------
+	-------------------------------------------------implementation I----------------------------------------------------
 
 	func processA(wait <-chan struct{}, release chan<- struct{}) {
 	fmt.Println("in process A")
@@ -44,13 +46,13 @@ import (
 	}
 
 
-	-------------------------------------------------------------------------------------------------------------
+	-------------------------------------------------------------------------------------------------------------------
 	if process B follows other order, i.e.,
 	release()
 	wait()
 	it will cause a deadlock
 
-	--------------------------------------------------deadlock---------------------------------------------------
+	--------------------------------------------------deadlock---------------------------------------------------------
 
 	func processA(wait <-chan struct{}, release chan<- struct{}) {
 	fmt.Println("in process A")
@@ -80,10 +82,12 @@ import (
 		time.Sleep(time.Second * 10)
 	}
 
-	-------------------------------------------------------------------------------------------------------------
+	-------------------------------------------------------------------------------------------------------------------
 
 	one way to avoid this is to use buffered channel, implemented below
 */
+
+/*-------------------------------------------------Implementation II---------------------------------------------------*/
 
 func processA(wait <-chan struct{}, release chan<- struct{}) {
 	fmt.Println("process A is executing")
@@ -91,6 +95,7 @@ func processA(wait <-chan struct{}, release chan<- struct{}) {
 	fmt.Println("waiting for B's signal")
 	<-wait
 	fmt.Println("Got Signal from B")
+	time.Sleep(5 * time.Second)
 	fmt.Println("execution DONE : process A")
 }
 
@@ -100,6 +105,7 @@ func processB(wait <-chan struct{}, release chan<- struct{}) {
 	fmt.Println("waiting for A's signal")
 	<-wait
 	fmt.Println("Got Signal from A")
+	time.Sleep(5 * time.Second)
 	fmt.Println("execution DONE : process B")
 }
 
@@ -107,8 +113,18 @@ func main() {
 	ch1 := make(chan struct{}, 1) // can be unbuffered for this impl
 	ch2 := make(chan struct{}, 1)
 
-	go processA(ch1, ch2)
-	go processB(ch2, ch1)
+	errgrp := errgroup.Group{}
 
-	time.Sleep(time.Second * 10)
+	errgrp.Go(func() error {
+		processB(ch2, ch1)
+		return nil
+	})
+	errgrp.Go(func() error {
+		processA(ch1, ch2)
+		return nil
+	})
+
+	if err := errgrp.Wait(); err != nil {
+		fmt.Printf("error while processing : %s", err)
+	}
 }
