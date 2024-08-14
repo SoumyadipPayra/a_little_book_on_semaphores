@@ -125,6 +125,6 @@ func main() {
 	})
 
 	if err := errgrp.Wait(); err != nil {
-		fmt.Printf("error while processing : %s", err)
+		fmt.Printf("error while processing : %s", err.Error())
 	}
 }
